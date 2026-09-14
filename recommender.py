@@ -198,4 +198,63 @@ class RestaurantFeatureSpace:
             [cuisine_vec, [price_val], [rating_val], [table_val], [delivery_val]]
         )
  
+ #5. RECOMMENDATION FUNCTION
+ 
+def recommend(
+    profile: dict,
+    data: pd.DataFrame,
+    fs: RestaurantFeatureSpace,
+    top_n: int = 5,
+    weights: dict = None,
+    exclude_unrated: bool = False,
+) -> pd.DataFrame:
+    """
+    Rank restaurants by cosine similarity to a user preference profile.
+ 
+    profile keys (all optional -- missing keys simply mean "no opinion"):
+        cuisines: list[str]            e.g. ["North Indian", "Chinese"]
+        price_range: int in {1,2,3,4}
+        min_rating: float in [0,5]
+        city: str                      hard filter -- exact match on 'City'
+        prefers_table_booking: bool
+        prefers_online_delivery: bool
+ 
+    Edge cases handled:
+      - Unknown cuisine name -> raised clearly rather than silently ignored.
+      - city filter matching zero restaurants -> returns an empty frame
+        with a warning message instead of crashing.
+      - exclude_unrated=True drops restaurants with no reliable rating
+        yet, appropriate when the user profile explicitly cares about
+        rating (e.g. "seeking highly rated restaurants").
+    """
+    candidates = data
+    if profile.get("city"):
+        candidates = candidates[candidates["City"] == profile["city"]]
+        if candidates.empty:
+            print(f"[warning] No restaurants found in city='{profile['city']}'.")
+            return candidates
+ 
+    if exclude_unrated:
+        candidates = candidates[candidates["Is Rated"]]
+ 
+    if candidates.empty:
+        print("[warning] No candidates remain after filtering.")
+        return candidates
+ 
+    full_matrix = fs.build_matrix(weights)
+    cand_matrix = full_matrix[candidates.index.to_numpy()]
+ 
+    user_vec = fs.build_user_vector(profile, weights).reshape(1, -1)
+    sims = cosine_similarity(cand_matrix, user_vec).ravel()
+ 
+    out = candidates.copy()
+    out["Similarity"] = sims
+    out = out.sort_values("Similarity", ascending=False).head(top_n)
+ 
+    display_cols = [
+        "Restaurant Name", "City", "Cuisines", "Price range",
+        "Average Cost for two", "Currency", "Aggregate rating",
+        "Rating text", "Votes", "Similarity",
+    ]
+    return out[display_cols].reset_index(drop=True)
  

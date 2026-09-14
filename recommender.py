@@ -257,4 +257,67 @@ def recommend(
         "Rating text", "Votes", "Similarity",
     ]
     return out[display_cols].reset_index(drop=True)
+
+# 6.EVALUATION FUNCTION:
  
+def evaluate_recommendations(profile: dict, recs: pd.DataFrame, overall_mean_rating: float) -> dict:
+    """Preference-alignment metrics for a single user's recommendation set."""
+    if recs.empty:
+        return {}
+ 
+    metrics = {}
+ 
+    if profile.get("cuisines"):
+        wanted = set(profile["cuisines"])
+        match = recs["Cuisines"].apply(
+            lambda s: bool(wanted.intersection({c.strip() for c in s.split(",")}))
+        )
+        metrics["cuisine_match_rate"] = float(match.mean())
+ 
+    if profile.get("price_range"):
+        metrics["mean_abs_price_deviation"] = float(
+            (recs["Price range"] - profile["price_range"]).abs().mean()
+        )
+ 
+    if profile.get("city"):
+        metrics["city_match_rate"] = float((recs["City"] == profile["city"]).mean())
+ 
+    metrics["mean_recommended_rating"] = float(recs["Aggregate rating"].mean())
+    metrics["lift_over_overall_mean_rating"] = float(
+        recs["Aggregate rating"].mean() - overall_mean_rating
+    )
+    return metrics
+
+def cuisine_coherence_check(data: pd.DataFrame, fs: RestaurantFeatureSpace, sample_size=300, k=5, seed=RANDOM_STATE) -> float:
+    """
+    A dataset-supported sanity/robustness check that does NOT require
+    ground-truth user ratings: for a random sample of restaurants, find
+    each one's top-k nearest neighbours (by cuisine-only cosine similarity,
+    restricted to the same city so the comparison is meaningful) and
+    measure how often the neighbours actually share at least one cuisine
+    tag with the seed restaurant. This checks that the similarity engine
+    is behaving sensibly at scale -- it is NOT a substitute for a real
+    accuracy metric such as precision@k against known likes.
+    """
+    rng = np.random.default_rng(seed)
+    cuisine_only = fs.cuisine_matrix.astype(float)
+    idx_by_city = data.groupby("City").indices
+ 
+    sample_idx = rng.choice(data.index.to_numpy(), size=min(sample_size, len(data)), replace=False)
+    hits = []
+    for i in sample_idx:
+        city = data.loc[i, "City"]
+        city_idx = idx_by_city.get(city, np.array([]))
+        city_idx = city_idx[city_idx != data.index.get_loc(i)]
+        if len(city_idx) < k:
+            continue
+        seed_vec = cuisine_only[data.index.get_loc(i)].reshape(1, -1)
+        sims = cosine_similarity(cuisine_only[city_idx], seed_vec).ravel()
+        top_k = city_idx[np.argsort(-sims)[:k]]
+        seed_cuisines = set(data.loc[i, "Cuisine List"])
+        neighbour_hit = [
+            bool(seed_cuisines.intersection(set(data.iloc[j]["Cuisine List"])))
+            for j in top_k
+        ]
+        hits.append(np.mean(neighbour_hit))
+    return float(np.mean(hits)) if hits else float("nan")

@@ -1,3 +1,4 @@
+[![Open in GitHub Codespaces](https://github.com/codespaces/badge.svg)](https://codespaces.new/naikmayanka04/restaurant-recommender)
 ![Python](https://img.shields.io/badge/python-3.9%2B-blue)
 ![pandas](https://img.shields.io/badge/pandas-data%20processing-150458)
 ![scikit--learn](https://img.shields.io/badge/scikit--learn-cosine%20similarity-F7931E)

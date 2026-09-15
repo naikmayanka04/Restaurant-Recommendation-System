@@ -6,6 +6,9 @@ from sklearn.metrics.pairwise import cosine_similarity
 pd.set_option("display.max_columns", 30)
 pd.set_option("display.width", 200)
 
+RANDOM_STATE = 42
+np.random.seed(RANDOM_STATE)
+
 # 1. LOAD
  
 def load_data(path: str) -> pd.DataFrame:
@@ -321,3 +324,60 @@ def cuisine_coherence_check(data: pd.DataFrame, fs: RestaurantFeatureSpace, samp
         ]
         hits.append(np.mean(neighbour_hit))
     return float(np.mean(hits)) if hits else float("nan")
+
+if __name__ == "__main__":
+    df_raw = load_data("dataset.xlsx")
+    eda = run_eda(df_raw)
+    data, prep_meta = preprocess(df_raw)
+    fs = RestaurantFeatureSpace(data)
+ 
+    overall_mean_rating = data.loc[data["Is Rated"], "Aggregate rating"].mean()
+ 
+    print("=== EDA ===")
+    print("shape:", eda["shape"])
+    print("dropped rows (missing cuisine):", prep_meta["dropped_missing_cuisine"])
+    print("clean shape:", data.shape)
+    print("n_unique_cuisines:", eda["n_unique_cuisines"])
+    print("overall mean rating (rated only):", round(overall_mean_rating, 3))
+ 
+    profiles = {
+        "User 1 - Affordable Indian": dict(
+            cuisines=["North Indian"], price_range=1, city="New Delhi"
+        ),
+        "User 2 - Highly Rated Seeker": dict(
+            min_rating=4.5, city="New Delhi"
+        ),
+        "User 3 - Premium Diner": dict(
+            cuisines=["Continental", "Italian"], price_range=4, min_rating=4.0,
+            city="Gurgaon", prefers_table_booking=True
+        ),
+        "User 4 - Cuisine + Location": dict(
+            cuisines=["Japanese"], city="New Delhi"
+        ),
+        "User 5 - Mixed Preferences": dict(
+            cuisines=["Cafe", "Desserts"], price_range=2, min_rating=3.5
+        ),
+    }
+ 
+    weight_overrides = {
+        "User 2 - Highly Rated Seeker": {"cuisine": 0.5, "rating": 4.0, "price": 0.5},
+        "User 3 - Premium Diner": {"cuisine": 2.0, "price": 3.0, "rating": 2.0},
+    }
+    exclude_unrated_flags = {
+        "User 2 - Highly Rated Seeker": True,
+        "User 3 - Premium Diner": True,
+    }
+ 
+    for name, profile in profiles.items():
+        print(f"\n\n===== {name} =====")
+        print("Profile:", profile)
+        w = weight_overrides.get(name)
+        excl = exclude_unrated_flags.get(name, False)
+        recs = recommend(profile, data, fs, top_n=5, weights=w, exclude_unrated=excl)
+        print(recs.to_string(index=False))
+        metrics = evaluate_recommendations(profile, recs, overall_mean_rating)
+        print("Metrics:", metrics)
+ 
+    coherence = cuisine_coherence_check(data, fs)
+    print("\n\n=== Cuisine coherence check (top-5 same-city neighbours sharing >=1 cuisine) ===")
+    print(f"{coherence:.3f}")

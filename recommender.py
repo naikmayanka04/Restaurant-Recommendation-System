@@ -16,7 +16,7 @@ def load_data(path: str) -> pd.DataFrame:
     df = pd.read_excel(path)
     return df
 
-2. EXPLORATORY DATA ANALYSIS
+#2. EXPLORATORY DATA ANALYSIS
 
 def run_eda(df: pd.DataFrame) -> dict:
     """Collect EDA facts used in the report. Returns a dict of computed
@@ -326,7 +326,7 @@ def cuisine_coherence_check(data: pd.DataFrame, fs: RestaurantFeatureSpace, samp
     return float(np.mean(hits)) if hits else float("nan")
 
 if __name__ == "__main__":
-    df_raw = load_data("dataset.xlsx")
+    df_raw = load_data("Restaurant Dataset.xlsx")
     eda = run_eda(df_raw)
     data, prep_meta = preprocess(df_raw)
     fs = RestaurantFeatureSpace(data)
